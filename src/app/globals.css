@@ -1,0 +1,107 @@
+@import "tailwindcss";
+
+/* Light Theme (default) */
+:root,
+[data-theme="light"] {
+  --bg-primary: #ffffff;
+  --bg-secondary: #F0F4F8;
+  --text-primary: #0A2540;
+  --text-secondary: #5A6B7C;
+  --navbar-bg: rgba(255, 255, 255, 0.92);
+  --card-bg: #ffffff;
+  --border-color: #e5e7eb;
+  --color-heading: #0A2540;
+  --color-accent-orange: #F97316;
+  --color-accent-cyan: #0096C7;
+  --color-accent-red: #DC2626;
+  --color-accent-yellow: #EAB308;
+}
+
+/* Dim / Medium Light */
+[data-theme="dim"] {
+  --bg-primary: #F5F7FA;
+  --bg-secondary: #E9ECF1;
+  --text-primary: #1a2a3a;
+  --text-secondary: #4a5568;
+  --navbar-bg: rgba(245, 247, 250, 0.92);
+  --card-bg: #ffffff;
+  --border-color: #d1d5db;
+  --color-heading: #1a2a3a;
+  --color-accent-orange: #e67e22;
+  --color-accent-cyan: #0088b3;
+  --color-accent-red: #c0392b;
+  --color-accent-yellow: #d4a017;
+}
+
+/* Dark Theme */
+[data-theme="dark"] {
+  --bg-primary: #121212;
+  --bg-secondary: #1E1E1E;
+  --text-primary: #f0f0f0;
+  --text-secondary: #b0b0b0;
+  --navbar-bg: rgba(18, 18, 18, 0.92);
+  --card-bg: #1E1E1E;
+  --border-color: #333333;
+  --color-heading: #ffffff;
+  --color-accent-orange: #FFA726;
+  --color-accent-cyan: #29B6F6;
+  --color-accent-red: #EF5350;
+  --color-accent-yellow: #FFD54F;
+}
+
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  transition: background-color 0.3s, color 0.3s;
+}
+
+/* ========== PDF PRINT STYLES ========== */
+@media print {
+  /* ซ่อนทุกอย่างก่อน */
+  body * {
+    visibility: hidden;
+  }
+
+  /* แสดงเฉพาะ Print Preview */
+  .print-container,
+  .print-container * {
+    visibility: visible;
+  }
+  .print-container {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    background: white;
+    padding: 0;
+    margin: 0;
+  }
+
+  /* ซ่อนปุ่มและองค์ประกอบที่ไม่ต้องการใน PDF */
+  .no-print {
+    display: none !important;
+  }
+
+  /* ตารางแบบ Clean สำหรับ PDF */
+  .pdf-clean-table th {
+    border-top: 1px solid #dfe1e6 !important;
+    border-bottom: 1px solid #dfe1e6 !important;
+    border-left: none !important;
+    border-right: none !important;
+    background-color: #f4f6f8 !important;
+    color: #172b4d !important;
+    padding: 8px 5px !important;
+  }
+  .pdf-clean-table td {
+    border-bottom: 1px solid #f4f6f8 !important;
+    border-left: none !important;
+    border-right: none !important;
+    padding: 6px 5px !important;
+  }
+
+  /* ตั้งค่ากระดาษ */
+  @page {
+    margin: 1cm;
+    size: A4 portrait;
+  }
+}
