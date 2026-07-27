@@ -55,7 +55,7 @@ function DashboardHubContent() {
           <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
             <div>
               <p className="text-white/70 text-xs md:text-sm mb-0.5">
-                {greeting}, {userData?.displayName || user?.email?.split('@')[0]}
+                {greeting}, {user?.email?.split('@')[0] || 'ผู้ใช้'}
               </p>
               <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-2">
                 <LayoutDashboard className="w-6 h-6 text-[#F97316]" />

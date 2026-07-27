@@ -1,27 +1,9 @@
 import { NextResponse } from 'next/server';
 import axios from 'axios';
-import { initializeApp, getApps } from 'firebase/app';
-import {
-  getFirestore,
-  collection,
-  doc,
-  getDoc,
-  setDoc,
-  writeBatch,
-  serverTimestamp,
-} from 'firebase/firestore';
+import { adminDb } from '@/lib/firebase-admin';
+import { FieldValue } from 'firebase-admin/firestore';
 
-const firebaseConfig = {
-  apiKey: "AIzaSyB4p8CccM7P7DCTET9g58onpMIxlaETv9g",
-  authDomain: "stclass-ntn.firebaseapp.com",
-  projectId: "stclass-ntn",
-  storageBucket: "stclass-ntn.firebasestorage.app",
-  messagingSenderId: "490787953291",
-  appId: "1:490787953291:web:0325319eb735031eae128e",
-};
-
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
-const db = getFirestore(app);
+export const dynamic = 'force-dynamic';
 
 function extractInvoiceData(row: any) {
   const rawDateStr = row.InvcDtl_ShipDate || row.InvcHead_InvoiceDate || '';
@@ -73,7 +55,7 @@ function extractInvoiceData(row: any) {
     docType,
     rawDate: displayDate,
     isoDate,
-    syncedAt: serverTimestamp(),
+    syncedAt: FieldValue.serverTimestamp(),
   };
 }
 
@@ -88,10 +70,9 @@ export async function GET(request: Request) {
   try {
     let existingInvNums: Set<string> = new Set();
     if (!isFullSync) {
-      const metaRef = doc(db, 'meta', 'twmInvNums');
-      const metaSnap = await getDoc(metaRef);
-      if (metaSnap.exists()) {
-        existingInvNums = new Set(metaSnap.data().list || []);
+      const metaSnap = await adminDb.collection('meta').doc('twmInvNums').get();
+      if (metaSnap.exists) {
+        existingInvNums = new Set(metaSnap.data()?.list || []);
       }
     }
 
@@ -134,32 +115,32 @@ export async function GET(request: Request) {
       : invoiceList.filter((inv: any) => !existingInvNums.has(inv.invNum));
 
     if (newInvoices.length > 0) {
-      const collRef = collection(db, 'epicor_invoices_twm');
+      const collRef = adminDb.collection('epicor_invoices_twm');
       const batchSize = 400;
       const newInvNums: string[] = [];
 
       for (let i = 0; i < newInvoices.length; i += batchSize) {
-        const batch = writeBatch(db);
+        const batch = adminDb.batch();
         const batchItems = newInvoices.slice(i, i + batchSize);
         for (const inv of batchItems) {
-          const docRef = doc(collRef, inv.invNum);
+          const docRef = collRef.doc(inv.invNum);
           batch.set(docRef, inv, { merge: true });
           newInvNums.push(inv.invNum);
         }
         await batch.commit();
       }
 
-      const metaRef = doc(db, 'meta', 'twmInvNums');
+      const metaRef = adminDb.collection('meta').doc('twmInvNums');
       if (isFullSync) {
-        await setDoc(metaRef, { list: newInvNums, lastUpdate: serverTimestamp() });
+        await metaRef.set({ list: newInvNums, lastUpdate: FieldValue.serverTimestamp() });
       } else {
         const updatedList = [...existingInvNums, ...newInvNums];
-        await setDoc(metaRef, { list: updatedList, lastUpdate: serverTimestamp() });
+        await metaRef.set({ list: updatedList, lastUpdate: FieldValue.serverTimestamp() });
       }
     }
 
-    await setDoc(doc(db, 'settings', 'syncStatus'), {
-      lastSyncTWM: serverTimestamp(),
+    await adminDb.collection('settings').doc('syncStatus').set({
+      lastSyncTWM: FieldValue.serverTimestamp(),
     }, { merge: true });
 
     return NextResponse.json({

@@ -1,25 +1,115 @@
 import { NextResponse } from 'next/server';
-import { initializeApp, getApps } from 'firebase/app';
-import { getFirestore, collection, getDocs, doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { adminDb } from '@/lib/firebase-admin';
+import { FieldValue } from 'firebase-admin/firestore';
 
-const firebaseConfig = { /* เหมือนข้างบน */ };
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
-const db = getFirestore(app);
+export const dynamic = 'force-dynamic';
 
 export async function GET() {
-  const collRef = collection(db, 'epicor_invoices_twm');
-  const snapshot = await getDocs(collRef);
-  const invoices: any[] = [];
-  snapshot.forEach(d => invoices.push(d.data()));
+  try {
+    // ดึงข้อมูล invoice ทั้งหมดจาก Firestore
+    const collRef = adminDb.collection('epicor_invoices_twm');
+    const snapshot = await collRef.get();
+    const invoices: any[] = [];
+    snapshot.forEach(doc => {
+      invoices.push({ id: doc.id, ...doc.data() });
+    });
 
-  const today = new Date().toISOString().split('T')[0];
-  const currentMonth = new Date().getMonth() + 1;
-  const currentYear = new Date().getFullYear();
+    // ถ้าไม่มีข้อมูล
+    if (invoices.length === 0) {
+      return NextResponse.json({ success: true, message: 'No invoices found', data: [] });
+    }
 
-  // คำนวณเหมือนใน UI แต่ฝั่งเซิร์ฟเวอร์
-  // ... (logic เดียวกับที่ใช้ใน Dashboard)
-  // เก็บผลลัพธ์ลงเอกสาร aggregations/twm_daily
-  // ...
+    // คำนวณค่า aggregation
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+    const currentMonth = today.getMonth() + 1;
+    const currentYear = today.getFullYear();
 
-  return NextResponse.json({ success: true });
+    // คำนวณ Daily, MTD, YTD
+    let dailyTotal = 0;
+    let mtdTotal = 0;
+    let ytdTotal = 0;
+    let dailyBreakdown: Record<string, number> = {};
+    let mtdBreakdown: Record<string, number> = {};
+    let ytdBreakdown: Record<string, number> = {};
+
+    for (const inv of invoices) {
+      const isoDate = inv.isoDate;
+      const netPrice = inv.netPrice || 0;
+      const docType = inv.docType || 'IVT';
+
+      if (!isoDate) continue;
+
+      const invDate = new Date(isoDate);
+      const invMonth = invDate.getMonth() + 1;
+      const invYear = invDate.getFullYear();
+
+      // Year to Date
+      if (invYear === currentYear && invDate <= today) {
+        ytdTotal += netPrice;
+        ytdBreakdown[docType] = (ytdBreakdown[docType] || 0) + netPrice;
+      }
+
+      // Month to Date
+      if (invMonth === currentMonth && invYear === currentYear && invDate <= today) {
+        mtdTotal += netPrice;
+        mtdBreakdown[docType] = (mtdBreakdown[docType] || 0) + netPrice;
+      }
+
+      // Daily
+      if (isoDate === todayStr) {
+        dailyTotal += netPrice;
+        dailyBreakdown[docType] = (dailyBreakdown[docType] || 0) + netPrice;
+      }
+    }
+
+    // สร้างข้อมูล aggregation
+    const aggregationData = {
+      daily: {
+        total: dailyTotal,
+        breakdown: dailyBreakdown,
+        invoiceCount: invoices.filter(inv => inv.isoDate === todayStr).length,
+      },
+      mtd: {
+        total: mtdTotal,
+        breakdown: mtdBreakdown,
+        invoiceCount: invoices.filter(inv => {
+          if (!inv.isoDate) return false;
+          const d = new Date(inv.isoDate);
+          return d.getMonth() + 1 === currentMonth && d.getFullYear() === currentYear && d <= today;
+        }).length,
+      },
+      ytd: {
+        total: ytdTotal,
+        breakdown: ytdBreakdown,
+        invoiceCount: invoices.filter(inv => {
+          if (!inv.isoDate) return false;
+          const d = new Date(inv.isoDate);
+          return d.getFullYear() === currentYear && d <= today;
+        }).length,
+      },
+      totalInvoices: invoices.length,
+      updatedAt: FieldValue.serverTimestamp(),
+    };
+
+    // บันทึกผลลัพธ์ลง Firestore
+    await adminDb.collection('aggregations').doc('twm_daily').set(aggregationData, { merge: true });
+
+    return NextResponse.json({
+      success: true,
+      message: 'Aggregation completed successfully',
+      data: {
+        daily: aggregationData.daily,
+        mtd: aggregationData.mtd,
+        ytd: aggregationData.ytd,
+        totalInvoices: aggregationData.totalInvoices,
+      },
+    });
+  } catch (error: any) {
+    console.error('Aggregation error:', error.message);
+    return NextResponse.json(
+      { error: 'Aggregation failed', detail: error.message },
+      { status: 500 }
+    );
+  }
 }
